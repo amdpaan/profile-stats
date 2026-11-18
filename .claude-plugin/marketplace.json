@@ -1,0 +1,11 @@
+{
+  "name": "profile-stats",
+  "owner": { "name": "amdpaan" },
+  "plugins": [
+    {
+      "name": "profile-stats",
+      "source": "./",
+      "description": "A dark profile card beside the chat with your Claude Code token stats, activity heatmap, estimated cost and top tools"
+    }
+  ]
+}

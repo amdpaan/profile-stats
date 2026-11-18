@@ -1,0 +1,28 @@
+{
+  "name": "profile-stats",
+  "version": "0.1.0",
+  "description": "A dark profile card beside the chat with your Claude Code token stats, activity heatmap, estimated cost and top tools",
+  "author": { "name": "amdpaan" },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "displayName": {
+      "type": "string",
+      "title": "Display name",
+      "description": "The name shown at the top of the Profile panel",
+      "default": "Paan"
+    },
+    "initials": {
+      "type": "string",
+      "title": "Avatar initials",
+      "description": "One or two letters for the round avatar; leave empty to use the display name's initials",
+      "default": ""
+    },
+    "utcOffsetHours": {
+      "type": "number",
+      "title": "UTC offset (hours)",
+      "description": "Your time zone's offset from UTC, used for days and streaks (8 for Kuala Lumpur, -5 for New York in winter)",
+      "default": 8
+    }
+  }
+}
