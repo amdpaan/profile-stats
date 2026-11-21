@@ -30,8 +30,13 @@ export const PRICES: Record<string, [number, number, number]> = {
 }
 const FALLBACK_MODEL = 'claude-opus-5-5'
 
-// Tools the Claude app calls for its own bookkeeping, left out of Top tools.
-export const isAppTool = (name: string) => /^ccd[ _]/.test(name) || name === 'ToolSearch'
+// A session's folder named as a project: its last path part, with a Claude
+// worktree (<repo>/.claude/worktrees/<name>) counted under its repo.
+export const projectName = (cwd: string) => {
+  const repo = cwd.replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, '')
+  return repo.split(/[\\/]/).filter(Boolean).pop() ?? repo
+}
+export const NO_PROJECT = 'Other'
 
 // ---------------------------------------------------------------------------
 // Per-file cache: one entry per log file, read incrementally from a byte
@@ -47,9 +52,11 @@ export type FileEntry = {
   longest: number // longest closed turn in this file, active ms
   days: Record<string, number> // all tokens per local day
   cost: Record<string, number> // estimated USD per local day
-  tools: Record<string, number> // tool / MCP server -> calls
+  cwd?: string // last folder the session ran in
+  projects: Record<string, Usage> // project -> tokens and USD
   unpriced: number // responses from a model missing from PRICES
 }
+export type Usage = { tokens: number; usd: number }
 export type Cache = { files: Record<string, FileEntry> }
 
 export const freshEntry = (): FileEntry => ({
@@ -57,7 +64,7 @@ export const freshEntry = (): FileEntry => ({
   longest: 0,
   days: {},
   cost: {},
-  tools: {},
+  projects: {},
   unpriced: 0,
 })
 
@@ -69,13 +76,13 @@ export const freshEntry = (): FileEntry => ({
 // ---------------------------------------------------------------------------
 
 export type History = {
-  days: Record<string, { tokens: number; usd: number }>
-  tools: Record<string, number>
+  days: Record<string, Usage>
+  projects: Record<string, Usage>
   longest: number
   unpriced: number
 }
 
-export const emptyHistory = (): History => ({ days: {}, tools: {}, longest: 0, unpriced: 0 })
+export const emptyHistory = (): History => ({ days: {}, projects: {}, longest: 0, unpriced: 0 })
 
 export const dayKey = (ms: number) => new Date(ms + tzOffsetMs).toISOString().slice(0, 10)
 
@@ -104,12 +111,6 @@ export const utf8len = (s: string) => {
     } else n += 3
   }
   return n
-}
-
-export const toolName = (name: string) => {
-  if (!name.startsWith('mcp__')) return name
-  const server = name.slice(5).split('__')[0]
-  return server ? `${server.replace(/_/g, ' ')} (MCP)` : name
 }
 
 // A turn starts at a prompt the person (or the app on their behalf) sent:
@@ -163,6 +164,7 @@ export function take(f: FileEntry, line: string) {
   if (!d || typeof d !== 'object' || Array.isArray(d)) return
   const ms = typeof d.timestamp === 'string' ? Date.parse(d.timestamp) : NaN
   const hasMs = Number.isFinite(ms)
+  if (typeof d.cwd === 'string' && d.cwd) f.cwd = d.cwd
 
   // Turn timing
   if (hasMs && isPrompt(d)) {
@@ -185,15 +187,6 @@ export function take(f: FileEntry, line: string) {
   const m = d.message
   if (!m || typeof m !== 'object') return
 
-  if (Array.isArray(m.content)) {
-    for (const b of m.content) {
-      if (b && b.type === 'tool_use' && typeof b.name === 'string') {
-        const k = toolName(b.name)
-        f.tools[k] = (f.tools[k] ?? 0) + 1
-      }
-    }
-  }
-
   // One API response is written as several records (one per content block),
   // each carrying the same id and the same usage: count it once.
   const id = typeof m.id === 'string' ? m.id : undefined
@@ -212,6 +205,10 @@ export function take(f: FileEntry, line: string) {
   f.days[k] = (f.days[k] ?? 0) + n
   const { usd, isPriced } = costOf(typeof m.model === 'string' ? m.model : '', u)
   f.cost[k] = (f.cost[k] ?? 0) + usd
+  if (!f.projects) f.projects = {}
+  const p = (f.projects[f.cwd ? projectName(f.cwd) : NO_PROJECT] ??= { tokens: 0, usd: 0 })
+  p.tokens += n
+  p.usd += usd
   if (!isPriced) f.unpriced = (f.unpriced ?? 0) + 1
 }
 
@@ -221,7 +218,7 @@ export function mergeHistory(prev: History, cache: Cache): History {
   const days: History['days'] = {}
   for (const [k, v] of Object.entries(prev.days)) days[k] = { ...v }
   const now: History['days'] = {}
-  const tools: Record<string, number> = {}
+  const projects: History['projects'] = {}
   let longest = 0
   let unpriced = 0
   for (const f of Object.values(cache.files)) {
@@ -230,7 +227,11 @@ export function mergeHistory(prev: History, cache: Cache): History {
       d.tokens += v
       d.usd += f.cost?.[k] ?? 0
     }
-    for (const [k, v] of Object.entries(f.tools)) tools[k] = (tools[k] ?? 0) + v
+    for (const [k, v] of Object.entries(f.projects ?? {})) {
+      const p = (projects[k] ??= { tokens: 0, usd: 0 })
+      p.tokens += v.tokens
+      p.usd += v.usd
+    }
     longest = Math.max(longest, f.longest, f.ta ?? 0)
     unpriced += f.unpriced ?? 0
   }
@@ -238,11 +239,15 @@ export function mergeHistory(prev: History, cache: Cache): History {
     const old = days[k]
     if (!old || v.tokens >= old.tokens) days[k] = v
   }
-  const allTools = { ...prev.tools }
-  for (const [k, v] of Object.entries(tools)) allTools[k] = Math.max(allTools[k] ?? 0, v)
+  const allProjects: History['projects'] = {}
+  for (const [k, v] of Object.entries(prev.projects ?? {})) allProjects[k] = { ...v }
+  for (const [k, v] of Object.entries(projects)) {
+    const old = allProjects[k]
+    if (!old || v.tokens >= old.tokens) allProjects[k] = v
+  }
   return {
     days,
-    tools: allTools,
+    projects: allProjects,
     longest: Math.max(prev.longest, longest),
     unpriced: Math.max(prev.unpriced, unpriced),
   }
@@ -283,11 +288,11 @@ export function summarize(h: History, now: number, isParsing: boolean): Stats {
     days[k] = v.tokens
     costDays[k] = v.usd
   }
-  const topTools = Object.entries(h.tools)
-    .filter(([k]) => !isAppTool(k))
-    .sort((a, b) => b[1] - a[1])
+  const topProjects = Object.entries(h.projects ?? {})
+    .filter(([, v]) => v.tokens > 0)
+    .sort((a, b) => b[1].tokens - a[1].tokens)
     .slice(0, 5)
-    .map(([name, count]) => ({ name, count }))
+    .map(([name, v]) => ({ name, tokens: v.tokens, usd: v.usd }))
   return {
     lifetime,
     peak,
@@ -299,7 +304,7 @@ export function summarize(h: History, now: number, isParsing: boolean): Stats {
     today,
     days,
     costDays,
-    topTools,
+    topProjects,
     updatedAt: now,
     isParsing,
   }

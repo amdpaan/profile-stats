@@ -6,7 +6,7 @@ What the panel shows:
 
 - **Stat tiles:** lifetime tokens, peak day, longest task, estimated cost, longest streak and current streak.
 - **Token activity:** a GitHub-style heatmap of the last 12 months (Daily), weekly totals as bars (Weekly) and the running total as a line (Cumulative). Hover any square, bar or point for the date, tokens and cost.
-- **Top tools:** the five tools or MCP servers you call most often.
+- **Top projects:** your five projects by tokens, with each one's estimated cost.
 
 ## Install
 
@@ -47,7 +47,7 @@ The offset is fixed, so in a zone with daylight saving, days near midnight can b
 - **Longest task** is the longest single turn, from your prompt to Claude's last message in it. Any gap over 5 minutes with no activity (a stalled retry, a command left running in the background) is left out.
 - **Est. cost** prices each reply at Anthropic's API list prices for its model: input, output and cache reads, with cache writes at 1.25× input (5-minute cache) or 2× input (1-hour cache), and fast mode at 2×. It is what the usage would cost on the API, not what a subscription plan bills. A reply from a model the mod has no price for is priced as Claude Opus 5.5, and the tile says so.
 - **Streaks** count consecutive days with any usage. The current streak still counts while today has no usage yet.
-- **Top tools** groups each MCP server's tools under the server's name, and leaves out the Claude app's own bookkeeping tools (`ccd_*`, ToolSearch).
+- **Top projects** names each project after the folder its session ran in. A Claude worktree (`<repo>/.claude/worktrees/<name>`) counts under its repo, and two folders with the same name count as one project.
 - A malformed log line is skipped.
 
 ## How it stays fast

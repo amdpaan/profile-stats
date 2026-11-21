@@ -35,8 +35,8 @@ let NAME = 'Paan'
 let INITIALS = 'P'
 const REFRESH_MS = 5 * 60 * 1000
 // The per-file cache is rebuilt from the logs whenever its key changes.
-const CACHE_KEY = 'cache-v4'
-const OLD_CACHE_KEYS = ['cache-v1', 'cache-v2', 'cache-v3']
+const CACHE_KEY = 'cache-v5'
+const OLD_CACHE_KEYS = ['cache-v1', 'cache-v2', 'cache-v3', 'cache-v4']
 // Daily totals that outlive the logs. Never deleted by a cache rebuild; bump
 // it only if the counting itself changes (it would otherwise keep old values).
 const HISTORY_KEY = 'history-v1'
@@ -53,7 +53,7 @@ const C = {
 }
 
 const stats = atom({ plugin: 'profile-stats', key: 'stats' } as const, null, {
-  shape: 'stats-3',
+  shape: 'stats-4',
 })
 const mode = atom({ plugin: 'profile-stats', key: 'mode' } as const, 'daily')
 
@@ -543,12 +543,14 @@ export const register: Register = (on, options) => {
         {s !== null &&
           card(
             <Box flexDirection="column" gap={0}>
-              <Text weight="semibold" color={C.text}>Top tools</Text>
-              {s.topTools.length === 0 && <Text size="footnote" color={C.dim}>No tool calls yet.</Text>}
-              {s.topTools.map(t => (
-                <Box flexDirection="row" justifyContent="space-between">
-                  <Text size="footnote" color={C.text} wrap="truncate">{t.name}</Text>
-                  <Text size="footnote" color={C.dim} tabular>{String(t.count).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</Text>
+              <Text weight="semibold" color={C.text}>Top projects</Text>
+              {s.topProjects.length === 0 && <Text size="footnote" color={C.dim}>No usage yet.</Text>}
+              {s.topProjects.map(p => (
+                <Box key={`project-${p.name}`} flexDirection="row" justifyContent="space-between" gap="sm">
+                  <Text size="footnote" color={C.text} wrap="truncate">{p.name}</Text>
+                  <Text size="footnote" color={C.dim} tabular>
+                    {`${fmtTokens(p.tokens)} · ${fmtUsd(p.usd)}`}
+                  </Text>
                 </Box>
               ))}
             </Box>,

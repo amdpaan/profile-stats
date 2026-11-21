@@ -13,6 +13,7 @@ import {
   fmtUsd,
   freshEntry,
   mergeHistory,
+  projectName,
   summarize,
   take,
   utf8len,
@@ -68,7 +69,7 @@ test('malformed and non-object lines are skipped, not fatal', () => {
   expect(f.days).toEqual({ '2026-11-18': 15 })
 })
 
-test('a reply split over several records is counted once; its tool calls each count', () => {
+test('a reply split over several records is counted once', () => {
   const usage = {
     input_tokens: 2,
     output_tokens: 100,
@@ -83,7 +84,7 @@ test('a reply split over several records is counted once; its tool calls each co
     ]),
   ])
   expect(f.days['2026-11-18']).toBe(1502)
-  expect(f.tools).toEqual({ Bash: 1, 'Roblox Studio (MCP)': 1 })
+  expect(f.projects.Other.tokens).toBe(1502) // no cwd in these records
 })
 
 test('days are counted in Kuala Lumpur time (UTC+8)', () => {
@@ -158,31 +159,59 @@ test('history keeps days whose logs are gone and takes growing days', () => {
   const prev = {
     ...emptyHistory(),
     days: { '2026-09-01': day(500, 1), '2026-11-18': day(10, 0.1) },
-    tools: { Bash: 7 },
+    projects: { gone: day(500, 1), 'profile-stats': day(10, 0.1) },
     longest: 9000,
   }
   const f = feed([
-    reply('2026-11-18T02:00:00Z', 'a', { output_tokens: 40 }, [
-      { type: 'tool_use', id: 'x', name: 'Bash', input: {} },
-    ]),
+    line({ type: 'user', cwd: '/Users/paan/Projects/profile-stats', timestamp: '2026-11-18T02:00:00Z', message: { role: 'user', content: 'go' } }),
+    reply('2026-11-18T02:00:00Z', 'a', { output_tokens: 40 }),
   ])
   const cache: Cache = { files: { '/log.jsonl': f } }
   const h = mergeHistory(prev, cache)
   expect(h.days['2026-09-01']).toEqual(day(500, 1)) // log deleted, total kept
   expect(h.days['2026-11-18'].tokens).toBe(40) // grew
-  expect(h.tools.Bash).toBe(7) // never shrinks
+  expect(h.projects.gone).toEqual(day(500, 1)) // log deleted, total kept
+  expect(h.projects['profile-stats'].tokens).toBe(40) // grew
   expect(h.longest).toBe(9000)
   const s = summarize(h, NOW, false)
   expect(s.lifetime).toBe(540)
   expect(s.peak).toEqual({ day: '2026-09-01', tokens: 500 })
 })
 
-test("Top tools leaves out the app's own bookkeeping tools", () => {
-  const h = { ...emptyHistory(), tools: { 'ccd turn (MCP)': 900, ToolSearch: 80, Bash: 10, Edit: 5 } }
-  expect(summarize(h, NOW, false).topTools).toEqual([
-    { name: 'Bash', count: 10 },
-    { name: 'Edit', count: 5 },
+test('projects: named after the folder, worktrees under their repo, top 5 by tokens', () => {
+  expect(projectName('/Users/paan/Projects/net-watch')).toBe('net-watch')
+  expect(projectName('/Users/paan/Projects/net-watch/')).toBe('net-watch')
+  expect(projectName('/Users/paan/Projects/net-watch/.claude/worktrees/fix-x')).toBe('net-watch')
+  expect(projectName('C:\\Users\\paan\\wifi-heatmap')).toBe('wifi-heatmap')
+
+  const at = (cwd: string, ts: string, id: string, n: number) => [
+    line({ type: 'user', cwd, timestamp: ts, message: { role: 'user', content: 'go' } }),
+    reply(ts, id, { output_tokens: n }),
+  ]
+  const f = feed([
+    ...at('/p/a', '2026-11-18T02:00:00Z', '1', 10),
+    ...at('/p/b/.claude/worktrees/w', '2026-11-18T02:01:00Z', '2', 30),
+    ...at('/p/b', '2026-11-18T02:02:00Z', '3', 5),
+    ...at('/p/c', '2026-11-18T02:03:00Z', '4', 1),
+    ...at('/p/d', '2026-11-18T02:04:00Z', '5', 2),
+    ...at('/p/e', '2026-11-18T02:05:00Z', '6', 3),
+    ...at('/p/f', '2026-11-18T02:06:00Z', '7', 4),
   ])
+  const s = summarize(mergeHistory(emptyHistory(), { files: { '/l.jsonl': f } }), NOW, false)
+  expect(s.topProjects.map(p => [p.name, p.tokens])).toEqual([
+    ['b', 35],
+    ['a', 10],
+    ['f', 4],
+    ['e', 3],
+    ['d', 2],
+  ])
+  expect(s.topProjects[0].usd).toBeGreaterThan(0)
+})
+
+test('a history saved before projects existed still loads', () => {
+  const old = { days: { '2026-11-18': { tokens: 5, usd: 0 } }, tools: { Bash: 3 }, longest: 0, unpriced: 0 } as any
+  expect(summarize(old, NOW, false).topProjects).toEqual([])
+  expect(mergeHistory(old, { files: {} }).projects).toEqual({})
 })
 
 test('initials come from the display name; the UTC offset moves the day boundary', () => {

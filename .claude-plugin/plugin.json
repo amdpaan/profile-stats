@@ -1,7 +1,7 @@
 {
   "name": "profile-stats",
   "version": "0.1.0",
-  "description": "A dark profile card beside the chat with your Claude Code token stats, activity heatmap, estimated cost and top tools",
+  "description": "A dark profile card beside the chat with your Claude Code token stats, activity heatmap, estimated cost and top projects",
   "author": { "name": "amdpaan" },
   "license": "MIT",
   "types": "./types/index.d.ts",

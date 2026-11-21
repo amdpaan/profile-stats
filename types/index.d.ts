@@ -11,7 +11,7 @@ export type Stats = {
   today: string
   days: Record<string, number> // tokens per local day, last ~12 months
   costDays: Record<string, number> // USD per local day, last ~12 months
-  topTools: { name: string; count: number }[]
+  topProjects: { name: string; tokens: number; usd: number }[] // by tokens, top 5
   updatedAt: number
   isParsing: boolean
 }
