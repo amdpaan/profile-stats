@@ -4,6 +4,7 @@ A Claude Code mod that adds a **Profile** panel beside the chat: a dark profile 
 
 What the panel shows:
 
+- **Header:** your name and avatar, with Claude Code's pixel mascot beside them (it blinks and hops now and then).
 - **Stat tiles:** lifetime tokens, peak day, longest task, estimated cost, longest streak and current streak.
 - **Token activity:** a GitHub-style heatmap of the last 12 months (Daily), weekly totals as bars (Weekly) and the running total as a line (Cumulative). Hover any square, bar or point for the date, tokens and cost.
 - **Top projects:** your five projects by tokens, with each one's estimated cost.

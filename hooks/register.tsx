@@ -384,6 +384,41 @@ function trend(cols: Cell[][], m: Mode, width: number): { source: string; height
 const avatar = () =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b84dd"/><stop offset="1" stop-color="#7c5cff"/></linearGradient></defs><circle cx="16" cy="16" r="16" fill="url(#g)"/><text x="16" y="21" text-anchor="middle" font-size="14" font-weight="600" fill="#fff" font-family="-apple-system, system-ui, sans-serif">${INITIALS}</text></svg>`
 
+// Claude Code's mascot, traced from the block characters of the CLI welcome
+// screen. Each character holds 2×2 quarter-blocks, and a terminal cell is
+// about twice as tall as it is wide, so every pixel here is 1 wide, 2 tall.
+// `#` is body, `e` an eye.
+const MASCOT = [
+  '...############...',
+  '...##e######e##...',
+  '.################.',
+  '...############...',
+  '....#.#....#.#....',
+]
+const MASCOT_COLOR = '#d77757'
+const MASCOT_SCALE = 3
+
+const mascot = () => {
+  const body: string[] = []
+  const eyes: string[] = []
+  const legs: string[] = []
+  MASCOT.forEach((row, y) => {
+    for (let x = 0; x < row.length; ) {
+      const ch = row[x]
+      let end = x
+      while (row[end] === ch) end++
+      const rect = `<rect x="${x}" y="${y * 2}" width="${end - x}" height="2"/>`
+      if (ch === 'e') eyes.push(rect)
+      else if (ch === '#') (y === MASCOT.length - 1 ? legs : body).push(rect)
+      x = end
+    }
+  })
+  const w = MASCOT[0].length
+  const h = MASCOT.length * 2
+  // The body bobs once and the eyes blink every few seconds; the legs stay put.
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -1 ${w} ${h + 1}" width="${w * MASCOT_SCALE}" height="${(h + 1) * MASCOT_SCALE}" shape-rendering="crispEdges"><g fill="${MASCOT_COLOR}">${legs.join('')}<g><animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 -1;0 0;0 0" keyTimes="0;0.7;0.75;0.8;1" dur="5s" repeatCount="indefinite"/>${body.join('')}<g fill="${C.card}"><animate attributeName="fill" values="${C.card};${C.card};${MASCOT_COLOR};${C.card}" keyTimes="0;0.92;0.95;1" dur="4s" repeatCount="indefinite"/>${eyes.join('')}</g></g></g></svg>`
+}
+
 // ---------------------------------------------------------------------------
 // Hooks
 // ---------------------------------------------------------------------------
@@ -485,16 +520,24 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column" gap="sm" padding="xs">
         {card(
-          <Box flexDirection="row" alignItems="center" gap="sm">
-            <Svg source={avatar()} alt={`${NAME} avatar`} width={32} height={32} />
-            <Box flexDirection="column">
-              <Text weight="semibold" color={C.text}>{NAME}</Text>
-              <Text size="caption" color={C.dim}>
-                {s === null || s.isParsing
-                  ? 'Reading session logs…'
-                  : `Updated ${new Date(s.updatedAt + tzOffset()).toISOString().slice(11, 16)}`}
-              </Text>
+          <Box flexDirection="row" alignItems="center" justifyContent="space-between" gap="sm">
+            <Box flexDirection="row" alignItems="center" gap="sm">
+              <Svg source={avatar()} alt={`${NAME} avatar`} width={32} height={32} />
+              <Box flexDirection="column">
+                <Text weight="semibold" color={C.text}>{NAME}</Text>
+                <Text size="caption" color={C.dim}>
+                  {s === null || s.isParsing
+                    ? 'Reading session logs…'
+                    : `Updated ${new Date(s.updatedAt + tzOffset()).toISOString().slice(11, 16)}`}
+                </Text>
+              </Box>
             </Box>
+            <Svg
+              source={mascot()}
+              alt="Claude Code mascot"
+              width={MASCOT[0].length * MASCOT_SCALE}
+              height={(MASCOT.length * 2 + 1) * MASCOT_SCALE}
+            />
           </Box>,
         )}
 
